@@ -7,7 +7,7 @@ entries:
   - name: shell
     kind: ns.dependency
     component: github.com/chicago-desktop/shell
-    version: ">=0.3.0"
+    version: ">=0.3.1"
   - name: desktop_properties
     kind: registry.entry
     meta: {type: chicago.desktop_menu, order: 900}

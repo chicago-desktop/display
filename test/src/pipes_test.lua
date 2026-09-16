@@ -2,6 +2,8 @@ local test = require("test")
 local pipes = require("pipes")
 local window = require("window")
 local renderer = require("renderer")
+local painter = require("painter")
+local chrome = require("chrome")
 local display = require("display")
 local ui = require("ui")
 local app = require("app")
@@ -31,19 +33,25 @@ local function define_tests()
             end
             test.is_true(resets > 0)
         end)
-        test.it("pauses, starts a new scene and closes on request", function()
-            local state = window.definition.init()
+        test.it("grows on tick, closes on keys and has no window controls", function()
+            local state=window.definition.init()
+            local before=state.scene.frame
             window.definition.update(state,{type="tick"},{})
-            local frame = state.scene.frame
-            window.definition.update(state,{type="activate",id="pause"},{})
-            test.is_false(window.definition.update(state,{type="tick"},{}))
-            test.eq(state.scene.frame,frame)
-            window.definition.update(state,{type="activate",id="new"},{})
-            test.eq(#state.scene.segments,0)
-            local context: any = {closed=false}
-            context.close = function() context.closed=true end
-            window.definition.update(state,{type="activate",id="close"},context)
-            test.is_true(context.closed)
+            test.eq(state.scene.frame,before+1)
+            local context=app.context({width=80,height=24})
+            local tree=window.definition.view(state,context)
+            test.eq(tree.kind,"picture");test.is_nil(tree.children);test.is_nil(tree.png)
+            window.definition.update(state,{type="key",key="a"},context)
+            test.is_true(context.closing)
+        end)
+        test.it("projects near pipes larger and rounds corners with continuous centerlines",function()
+            local near=painter.project({1,1,-8},800,500)
+            local far=painter.project({1,1,8},800,500)
+            test.is_true(near.r>far.r*2)
+            test.is_true(near.y>far.y)
+            local curve=painter.centerline({{0,0,0},{1,0,0},{1,1,0}})
+            test.is_true(#curve>4)
+            test.is_true(curve[3][1]<1 and curve[3][2]>0)
         end)
         test.it("opens Preview from Display and reports launch failures", function()
             local calls: any = {count=0}
@@ -56,12 +64,14 @@ local function define_tests()
         end)
         test.it("renders growing pipes and reuses an unchanged frame at different window sizes", function()
             local state: any = {scene=pipes.new(31415),paused=false}
-            for i=1,160 do state.scene=pipes.step(state.scene) end
+            for i=1,200 do state.scene=pipes.step(state.scene) end
             local files=assert(fs.get("chicago.shell.theme:fonts"))
             local fonts={face=assert(gfx.font(assert(files:readfile("LiberationSans-Regular.ttf")),{size=13,smooth=true}))}
             for _, size in ipairs({{78,27},{42,16}}) do
                 local context=app.context({width=size[1],height=size[2],native=true,cell_w=10,cell_h=20})
+                local started=time.now():unix_nano()
                 local tree=window.definition.view(state,context)
+                local provider_ms=(time.now():unix_nano()-started)/1000000
                 test.is_nil(ui.problem(tree))
                 local store=rasters.store();store.begin()
                 local data={id="pipes",state_revision=1,content_state={sdk=1,revision=1,ui=tree,interaction=context.interaction}}
@@ -69,17 +79,34 @@ local function define_tests()
                 local before=time.now():unix_nano()
                 local image=assert(renderer.placement(data,inner,{w=10,h=20},fonts,store))
                 local elapsed=(time.now():unix_nano()-before)/1000000
-                assert(assert(fs.get("app:shots")):writefile("pipes_timing_" .. tostring(size[1]) .. ".txt", tostring(elapsed)))
+                assert(assert(fs.get("app:shots")):writefile("pipes_timing_" .. tostring(size[1]) .. ".txt", "provider="..tostring(provider_ms)..", compositor="..tostring(elapsed)))
+                chrome.use_fonts(fonts.face,fonts.face)
+                data.render="chicago.shell.sdk:render";data.content="pixels"
+                local full=chrome.paint({width=size[1],height=size[2],presentation=data},10,20)
+                test.eq(#full.hits.bars,0);test.eq(#full.hits.desktop,0)
+                local rows=0
+                for _,part in ipairs(full.placements) do
+                    test.eq(part.x,1);test.eq(part.cols,size[1]);rows=rows+part.rows
+                end
+                test.eq(rows,size[2],"presentation covers the entire screen without a frame or taskbar")
                 local revision=image.raster:version()
                 local again=assert(renderer.placement(data,inner,{w=10,h=20},fonts,store))
                 test.eq(again.raster:version(),revision)
                 assert(assert(fs.get("app:shots")):writefile("pipes_"..tostring(size[1])..".png",assert(image.raster:encode("png"))))
                 state.scene=pipes.step(state.scene)
                 data.state_revision=2
+                local tick_at=time.now():unix_nano()
                 tree=window.definition.view(state,context)
+                assert(assert(fs.get("app:shots")):writefile("pipes_tick_"..tostring(size[1])..".txt",tostring((time.now():unix_nano()-tick_at)/1000000)))
                 data.content_state.ui=tree
                 local changed=assert(renderer.placement(data,inner,{w=10,h=20},fonts,store))
                 test.is_true(changed.raster:version()>revision)
+                local expected=assert(state.raster:encode("png"))
+                state.scene.render_cache=nil
+                local pw,ph=tonumber(state.width) or 1,tonumber(state.height) or 1
+                local fresh=gfx.raster(pw,ph)
+                painter.paint(fresh,state.scene,pw,ph)
+                test.eq(assert(fresh:encode("png")),expected,"cached geometry matches a fresh frame")
             end
         end)
     end)

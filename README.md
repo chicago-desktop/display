@@ -11,18 +11,20 @@ Open **Display Properties > Screen Saver**, choose **3D Pipes**, and click
 **Preview**. This release provides a manual preview only; it does not monitor
 inactivity, start automatically or lock the desktop.
 
-Three colored pipes grow through a bounded 3D grid on a black background.
+Eight colored pipes grow through a bounded 3D grid on a black background.
 Occupied grid points are not reused. Each pipe advances in short steps, and a
 completed or blocked scene pauses briefly before clearing and starting again.
-The view uses shaded cylinders, round joints and a fixed isometric projection.
+The view uses perspective, depth shading and continuous rounded elbows. Nearby
+pipes appear wider; distant paths converge into the scene.
 
-- **Pause / Resume** stops and resumes growth.
-- **New pipes** starts a fresh scene, preserving the pause setting.
-- **Close** or **Esc** closes the preview.
-- Resize or maximize the preview to change the viewing area.
+- Preview covers the whole terminal, including the taskbar area, without a frame.
+- Move the mouse, click, scroll or press any key to return to Display.
+- The opening mouse release does not dismiss Preview. The dismissal gesture is
+  consumed, so it cannot activate controls in Display or quit the desktop.
+- Terminal resizing keeps Preview full-screen.
 
 Pixel graphics (Kitty or Sixel) are required to see the animation. A terminal
-without graphics displays an explanation and the same controls.
+without graphics displays an explanation; any key returns to Display.
 
 ## Architecture
 
@@ -35,20 +37,21 @@ without graphics displays an explanation and the same controls.
 - Shared wallpaper and pattern catalogs remain shell rendering assets under
   `chicago.shell.display`; the Display application itself lives here.
 
-The preview renders at 480×300, scales with preserved aspect ratio, and updates
-at most five times per second. Each window owns its scene. Paused frames are
-reused. The preview writes no files, preferences or database entries.
+The preview renders at the terminal's aspect ratio, capped at 800×600, and targets
+five updates per second. Completed geometry is cached; only changing sections
+are rasterized again. The cache is bounded to the current scene and discarded
+when it resets. The preview writes no files, preferences or database entries.
 
 ## Installation
 
-Use Chicago shell **0.3.0 or later**, based on tui-desktop **0.2.2 or later**.
+Use Chicago shell **0.3.1 or later**, based on tui-desktop **0.2.3 or later**.
 Add this dependency to your application's registry and run `wippy install`:
 
 ```yaml
 - name: display
   kind: ns.dependency
   component: github.com/chicago-desktop/display
-  version: ">=0.1.0"
+  version: ">=0.1.1"
 ```
 
 No host-owned resources or dependency parameters are required. The module uses
@@ -78,7 +81,7 @@ make lint
 
 The harness replaces Display, shell and tui-desktop with sibling working copies.
 It owns all test host resources; the product module declares none. Tests include
-layout, settings updates, bounded growth, pause/restart/close, launch failure and
+layout, settings updates, bounded growth, perspective, rounded elbows and close, launch failure and
 real raster rendering at two window sizes (`test/shots/pipes_*.png`).
 
 ## Migration

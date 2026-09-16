@@ -128,6 +128,8 @@ entries:
       pipes: chicago.display.pipes:model
       window: chicago.display.pipes:window
       renderer: chicago.shell.sdk:render
+      painter: chicago.display.pipes:render
+      chrome: chicago.shell.theme:chrome_pixels
       display: chicago.display:window
       ui: chicago.shell.sdk:ui
       app: chicago.shell.sdk:app

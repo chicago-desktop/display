@@ -25,6 +25,7 @@ entries:
       in_menu: false
       width: 80
       height: 30
-      resizable: true
+      resizable: false
+      presentation: true
       pixel_render: chicago.shell.sdk:render
       pixel_state: chicago.display.pipes:window

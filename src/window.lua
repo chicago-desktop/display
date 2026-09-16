@@ -150,7 +150,7 @@ local function screen_saver(state: any): any
             {kind = "select", id = "saver", size = 2, size_px = 26, value = state.saver or "pipes",
                 options = {{value = "pipes", label = "3D Pipes"}}},
             {kind = "button", id = "preview", size = 2, size_px = 26, text = "Preview"},
-            {kind = "label", text = "Growing pipes on a black background. Preview only; automatic activation is not enabled.", wrap = true},
+            {kind = "label", text = "Full-screen preview. Move the mouse or press any key to return. Automatic activation is not enabled.", wrap = true},
             {kind = "label", text = state.failure or "Requires pixel graphics (Kitty or Sixel).", wrap = true, alert = state.failure ~= nil},
         }},
     }}
