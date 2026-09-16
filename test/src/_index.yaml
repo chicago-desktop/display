@@ -1,0 +1,144 @@
+version: "1.0"
+namespace: app
+entries:
+  - name: shots
+    kind: fs.directory
+    meta:
+      comment: Where the window's shot goes.
+    base: project
+    directory: ./shots
+    auto_init: true
+
+  - name: system_fonts
+    kind: fs.directory
+    meta:
+      comment: System TrueType fonts, read-only — the font arrives in gfx as bytes, not as a path.
+    auto_init: false
+    directory: /usr/share/fonts/truetype/liberation/
+
+  - name: db
+    kind: db.sql.sqlite
+    meta:
+      comment: In-memory database — the sample does not use it, but the shell's migrations ask for the resource.
+    file: ":memory:"
+
+  - name: env_storage
+    kind: env.storage.file
+    meta:
+      type: envstorage
+    file_path: ./.wippy/test.env
+    auto_create: true
+
+  - name: processes
+    kind: process.host
+    lifecycle:
+      auto_start: true
+
+  # The shell's endpoint entries resolve against these at boot; no suite calls
+  # them. The port is apart from the shell harness's :19229 and the other
+  # modules' harnesses, so they can run side by side.
+  - name: gateway
+    kind: http.service
+    addr: :19261
+    lifecycle:
+      auto_start: true
+
+  - name: api
+    kind: http.router
+    meta:
+      server: gateway
+    prefix: /api
+
+  - name: user
+    kind: security.policy
+    meta:
+      comment: Permissive actor scope for the suites.
+    policy:
+      resources: '*'
+      actions: '*'
+      effect: allow
+
+  # The harness tests the module, so it depends on it; the replacement in
+  # .wippy.yaml substitutes the working copy from ../.
+  - name: display_harness.dep.module
+    version: "*"
+    kind: ns.dependency
+    meta:
+      comment: The module under test; its source is replaced with ../ in .wippy.yaml.
+    component: "chicago/display"
+
+  - name: display_harness.dep.migration
+    version: "*"
+    kind: ns.dependency
+    meta:
+      comment: Host binding for the migrations the shell brings.
+    component: "wippy/migration"
+    parameters:
+      - name: wippy.migration:app_db
+        value: app:db
+
+  - name: display_harness.dep.security
+    version: "*"
+    kind: ns.dependency
+    meta:
+      comment: Platform security groups that give host-managed services their policy scope under strict mode.
+    component: "wippy/security"
+
+  - name: display_harness.dep.bootloader
+    version: "*"
+    kind: ns.dependency
+    meta:
+      comment: Host wiring for the standalone test harness.
+    component: "wippy/bootloader"
+    parameters:
+      - name: wippy.bootloader:application_host
+        value: app:processes
+      - name: wippy.bootloader:env_storage
+        value: app:env_storage
+
+  - name: display_test
+    kind: function.lua
+    meta:
+      type: test
+      comment: Display properties — the color shape and the resolution label, four tabs without overlaps in cells and at 8×16 and 10×20, the Windows 95 metrics, choosing a color and a pattern and applying through a substituted entry, OK after a successful write; the theme repaints the desktop through a single point.
+      group: Windows Shell
+      suite: chicago_display
+    source: file://display_test.lua
+    modules: [sql, env, time, uuid, tty]
+    imports:
+      test: wippy.test:test
+      model: chicago.display:model
+      ui: chicago.shell.sdk:ui
+      render: chicago.shell.sdk:render
+      display_window: chicago.display:window
+      chrome: chicago.shell.theme:chrome
+      chrome_pixels: chicago.shell.theme:chrome_pixels
+      widgets: chicago.shell.theme:widgets
+      palette: chicago.shell.theme:palette
+    method: run
+
+  - name: pipes_test
+    kind: function.lua
+    source: file://pipes_test.lua
+    method: run
+    meta: {type: test, suite: chicago_display, group: Pipes}
+    modules: [gfx, fs, time]
+    imports:
+      test: wippy.test:test
+      pipes: chicago.display.pipes:model
+      window: chicago.display.pipes:window
+      renderer: chicago.shell.sdk:render
+      display: chicago.display:window
+      ui: chicago.shell.sdk:ui
+      app: chicago.shell.sdk:app
+      rasters: chicago.shell.theme:rasters
+
+  - name: entries_test
+    kind: function.lua
+    source: file://entries_test.lua
+    method: run
+    meta: {type: test, suite: chicago_display, group: Registration}
+    modules: [registry]
+    imports:
+      test: wippy.test:test
+      menu: chicago.shell.programs:desktop_menu

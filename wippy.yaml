@@ -1,0 +1,8 @@
+organization: chicago
+module: display
+description: Desktop appearance settings and a 3D Pipes screensaver preview for the Chicago terminal desktop.
+repository: https://github.com/chicago-desktop/display
+license: MIT
+exclude_meta:
+  type: [test]
+exclude: ["test/**", "test:**", "app:**", ".wippy/**", "wippy.lock"]

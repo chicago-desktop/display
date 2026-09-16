@@ -1,0 +1,30 @@
+version: "1.0"
+namespace: chicago.display.pipes
+entries:
+  - name: model
+    kind: library.lua
+    source: file://model.lua
+  - name: render
+    kind: library.lua
+    source: file://render.lua
+  - name: window
+    kind: process.lua
+    source: file://window.lua
+    method: main
+    modules: [time, gfx, base64]
+    imports:
+      app: chicago.shell.sdk:app
+      pipes: chicago.display.pipes:model
+      painter: chicago.display.pipes:render
+    security:
+      policies: [chicago.shell.security:view_state]
+    meta:
+      type: tui_desktop.window
+      title: 3D Pipes - Preview
+      image: display_properties
+      in_menu: false
+      width: 80
+      height: 30
+      resizable: true
+      pixel_render: chicago.shell.sdk:render
+      pixel_state: chicago.display.pipes:window

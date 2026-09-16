@@ -1,0 +1,24 @@
+local test = require("test")
+local registry = require("registry")
+local menu = require("menu")
+local function define_tests()
+    test.describe("Display registration",function()
+        test.it("owns its window, desktop menu and Welcome tip without shell imports",function()
+            local window=assert(registry.get("chicago.display:window"))
+            test.eq(window.meta.type,"tui_desktop.window");test.eq(window.meta.group,"Settings")
+            test.eq(window.meta.pixel_render,"chicago.shell.sdk:render")
+            local items,why=menu.read()
+            test.is_nil(why);test.eq(#items,1);test.eq(items[1].entry,window.id)
+            local tip=assert(registry.get("chicago.display:tip"))
+            test.eq(tip.meta.type,"chicago.tip");test.eq(tip.data.open,window.id)
+            local old=registry.get("chicago.shell.display:window")
+            test.is_nil(old)
+            local theme=assert(registry.get("chicago.shell.theme:chrome_pixels"))
+            for _,target in pairs(theme.data.imports or {}) do
+                test.is_false(tostring(target):find("chicago.display",1,true) ~= nil)
+            end
+        end)
+    end)
+end
+local run_cases=test.run_cases(define_tests)
+return {run=function(options) return run_cases(options) end}
