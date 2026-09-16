@@ -1,5 +1,7 @@
 local test = require("test")
 local pipes = require("pipes")
+local options = require("options")
+local settings = require("settings")
 local window = require("window")
 local renderer = require("renderer")
 local painter = require("painter")
@@ -61,6 +63,64 @@ local function define_tests()
             state.preview=function() return nil,"Desktop unavailable" end
             display.definition.update(state,{type="activate",id="preview"},{})
             test.eq(state.failure,"Desktop unavailable")
+        end)
+        test.it("saves validated settings on OK, cancels without writing and keeps failed saves open",function()
+            test.eq(options.encode("bad:thick:chrome"),"normal:thick:chrome")
+            test.eq(options.encode(nil),"normal:normal:classic")
+            local calls:any={writes=0,closes=0}
+            local state:any={values=options.read(nil),persist=function(value)
+                calls.writes=calls.writes+1;calls.value=value;return true,nil end}
+            local context={close=function() calls.closes=calls.closes+1 end}
+            settings.definition.update(state,{type="change",id="speed",value="fast"},context)
+            settings.definition.update(state,{type="change",id="thickness",value="invalid"},context)
+            settings.definition.update(state,{type="activate",id="cancel"},context)
+            test.eq(calls.writes,0)
+            settings.definition.update(state,{type="activate",id="ok"},context)
+            test.eq(calls.value,"fast:normal:classic");test.eq(calls.closes,2)
+            state.persist=function() return nil,"Database busy" end
+            settings.definition.update(state,{type="activate",id="ok"},context)
+            test.eq(calls.closes,2);test.eq(state.failure,"Database busy")
+            local slow,fast=pipes.new(123),pipes.new(123)
+            slow=pipes.step(slow,"slow");fast=pipes.step(fast,"fast")
+            test.is_true(fast.segments[1].progress>slow.segments[1].progress)
+            local scene=pipes.new(123)
+            for i=1,40 do scene=pipes.step(scene) end
+            local raster=gfx.raster(320,240)
+            painter.paint(raster,scene,320,240)
+            local classic=assert(raster:encode("png"))
+            painter.paint(raster,scene,320,240,options.read("fast:thick:chrome"))
+            local configured=assert(raster:encode("png"))
+            test.is_true(classic~=configured)
+            scene.render_cache=nil
+            painter.paint(raster,scene,320,240,options.read("fast:thick:chrome"))
+            test.eq(assert(raster:encode("png")),configured,"option changes invalidate cached colors and widths")
+        end)
+        test.it("renders the classic Screen Saver structure and its settings dialog",function()
+            local files=assert(fs.get("chicago.shell.theme:fonts"))
+            local fonts={face=assert(gfx.font(assert(files:readfile("LiberationSans-Regular.ttf")),{size=13,smooth=true}))}
+            for _,cell in ipairs({{8,16},{10,20}}) do
+                chrome.use_cell_size(cell[1],cell[2])
+                local inset=chrome.window_insets({})
+                local cols,rows=54-inset.left-inset.right,28-inset.top-inset.bottom
+                local context=app.context({width=cols,height=rows,native=true,cell_w=cell[1],cell_h=cell[2]})
+                local tree=display.definition.view({tab=2},context)
+                test.is_nil(ui.problem(tree))
+                local plan=ui.plan(tree,cols,rows,context.interaction,{cell={w=cell[1],h=cell[2]}})
+                test.eq(plan.by_id.saver.rect.y,plan.by_id.preview.rect.y)
+                test.eq(plan.by_id.saver.rect.y,plan.by_id.saver_settings.rect.y)
+                test.is_true(plan.by_id.wait.node.disabled)
+                test.is_true(plan.by_id.resume.node.disabled)
+                test.is_true(plan.by_id.power.node.disabled)
+                local store=rasters.store();store.begin()
+                local image=assert(renderer.placement({id="display",state_revision=1,content_state={sdk=1,revision=1,ui=tree}},
+                    {x=1,y=1,cols=cols,rows=rows},{w=cell[1],h=cell[2]},fonts,store))
+                assert(assert(fs.get("app:shots")):writefile("screen_saver_"..tostring(cell[1])..".png",assert(image.raster:encode("png"))))
+                local settings_tree=settings.definition.view({values=options.read(nil)},context)
+                test.is_nil(ui.problem(settings_tree))
+                local sheet=assert(renderer.placement({id="settings",state_revision=1,content_state={sdk=1,revision=1,ui=settings_tree}},
+                    {x=1,y=1,cols=34,rows=16},{w=cell[1],h=cell[2]},fonts,store))
+                assert(assert(fs.get("app:shots")):writefile("pipes_settings_"..tostring(cell[1])..".png",assert(sheet.raster:encode("png"))))
+            end
         end)
         test.it("renders growing pipes and reuses an unchanged frame at different window sizes", function()
             local state: any = {scene=pipes.new(31415),paused=false}

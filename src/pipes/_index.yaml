@@ -1,6 +1,31 @@
 version: "1.0"
 namespace: chicago.display.pipes
 entries:
+  - name: options
+    kind: library.lua
+    source: file://options.lua
+  - name: settings
+    kind: process.lua
+    source: file://settings.lua
+    method: main
+    modules: [sql, time, uuid]
+    imports:
+      app: chicago.shell.sdk:app
+      repo: chicago.shell.persist:repo
+      options: chicago.display.pipes:options
+    security:
+      policies: [chicago.display:window_scope, chicago.shell.security:layout_target]
+    meta:
+      type: tui_desktop.window
+      title: 3D Pipes Settings
+      image: display_properties
+      in_menu: false
+      window_type: dialog
+      width: 36
+      height: 18
+      resizable: false
+      pixel_render: chicago.shell.sdk:render
+      pixel_state: chicago.display.pipes:settings
   - name: model
     kind: library.lua
     source: file://model.lua
@@ -14,6 +39,7 @@ entries:
     modules: [time, gfx, base64]
     imports:
       app: chicago.shell.sdk:app
+      options: chicago.display.pipes:options
       pipes: chicago.display.pipes:model
       painter: chicago.display.pipes:render
     security:

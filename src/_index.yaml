@@ -53,11 +53,9 @@ entries:
       order: 140
       window_type: dialog
       resizable: false
-      # 46×24 cells: at a 10×20 cell the page frame is 420×380 px against the
-      # 386×360 of the original. The record is cells, so at an 8×16 cell the
-      # same record is a smaller dialog (a 336×304 px page frame).
-      width: 46
-      height: 24
+      # Room for the classic Screen saver and Monitor power groups.
+      width: 54
+      height: 28
       pixel_render: chicago.shell.sdk:render
       pixel_state: chicago.display:window
       comment: Display Properties — the desktop pattern and color with a preview, applied through the shell settings; resolution and palette are read-only; a window on the shell SDK.
@@ -74,6 +72,7 @@ entries:
       app: chicago.shell.sdk:app
       desktop: chicago.tui_desktop.desktop:window_api
       repo: chicago.shell.persist:repo
+      options: chicago.display.pipes:options
       model: chicago.display:model
       patterns: chicago.shell.display:patterns
       wallpapers: chicago.shell.display:wallpapers

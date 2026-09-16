@@ -22,9 +22,9 @@ local function fixture(): (any, any)
         persist = function(settings: any) written[#written + 1] = settings; return true, nil end}, written
 end
 
--- The window entry's size (`chicago.shell.display:window`, 46×24) minus
+-- The window entry's size (`chicago.display:window`, 54×28) minus
 -- the frame of the theme that draws it: the client the compositor gives.
-local WIDTH, HEIGHT = 46, 24
+local WIDTH, HEIGHT = 54, 28
 local function pixel_client(cw: integer, ch: integer): (integer, integer)
     chrome_pixels.use_cell_size(cw, ch)
     local inset: any = chrome_pixels.window_insets({})

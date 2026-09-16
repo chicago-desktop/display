@@ -33,6 +33,7 @@ local model = require("model")
 local patterns = require("patterns")
 local wallpapers = require("wallpapers")
 local geometry = require("geometry")
+local options = require("options")
 local whole = geometry.whole
 
 local definition: any = {}
@@ -76,7 +77,12 @@ function definition.init(args: any, context: any): any
         wallpaper = wallpaper, wallpaper_saved = wallpaper, mode = mode, mode_saved = mode,
         info = screen_info(),
         saver = "pipes",
-        preview = function() return desktop.open({entry = "chicago.display.pipes:window", title = "3D Pipes - Preview"}) end,
+        preview = function()
+            local saved, read_err = store.setting(options.KEY)
+            if read_err then return nil, tostring(read_err) end
+            return desktop.open({entry = "chicago.display.pipes:window", title = "3D Pipes - Preview", args = options.read(saved)})
+        end,
+        saver_settings = function() return desktop.dialog({entry = "chicago.display.pipes:settings"}) end,
         failure = failure and ("settings not read: " .. tostring(failure)) or nil,
         -- The write and the request to the compositor are moved into a
         -- field: the test substitutes its own and checks that "Apply" calls
@@ -145,13 +151,30 @@ end
 
 local function screen_saver(state: any): any
     return {kind = "column", gap = 0, children = {
-        monitor("#000000", nil),
-        {kind = "group", title = "Screen Saver", children = {
-            {kind = "select", id = "saver", size = 2, size_px = 26, value = state.saver or "pipes",
-                options = {{value = "pipes", label = "3D Pipes"}}},
-            {kind = "button", id = "preview", size = 2, size_px = 26, text = "Preview"},
-            {kind = "label", text = "Full-screen preview. Move the mouse or press any key to return. Automatic activation is not enabled.", wrap = true},
-            {kind = "label", text = state.failure or "Requires pixel graphics (Kitty or Sixel).", wrap = true, alert = state.failure ~= nil},
+        -- A static monitor, as on the other pages. Animation belongs to Preview.
+        {kind = "monitor", color = "#000000"},
+        {kind = "group", title = "Screen saver", size = 7, size_px = 140, children = {
+            {kind = "row", size = 2, size_px = 30, gap = 1, gap_px = 6, children = {
+                {kind = "select", id = "saver", value = state.saver or "pipes",
+                    options = {{value = "pipes", label = "3D Pipes"}}},
+                {kind = "button", id = "saver_settings", size = 10, size_px = 81, width_px = 75, text = "Settings…"},
+                {kind = "button", id = "preview", size = 10, size_px = 81, width_px = 75, text = "Preview"},
+            }},
+            {kind = "row", size = 1, size_px = 22, gap = 1, gap_px = 6, children = {
+                {kind = "label", size = 5, size_px = 38, text = "Wait:", disabled = true},
+                {kind = "input", id = "wait", size = 5, size_px = 46, text = "10", disabled = true},
+                {kind = "label", text = "minutes", disabled = true},
+            }},
+            {kind = "checkbox", id = "resume", size = 1, size_px = 22,
+                text = "On resume, display Welcome screen", checked = false, disabled = true},
+            {kind = "label", size = 1, size_px = 20, text = state.failure or "Automatic start is not available.",
+                alert = state.failure ~= nil},
+        }},
+        {kind = "group", title = "Monitor power", size = 5, size_px = 90, children = {
+            {kind = "label", size = 2, size_px = 36, text = "Power saving is managed by your computer's operating system.", wrap = true},
+            {kind = "row", size = 2, size_px = 30, align = "right", children = {
+                {kind = "button", id = "power", size = 10, size_px = 81, width_px = 75, text = "Power…", disabled = true},
+            }},
         }},
     }}
 end
@@ -267,7 +290,10 @@ local function apply(state: any): boolean
 end
 
 function definition.update(state: any, action: any, context: any)
-    if action.id == "preview" and action.type == "activate" then
+    if action.id == "saver_settings" and action.type == "activate" then
+        local ok, err = state.saver_settings()
+        state.failure = not ok and tostring(err or "Settings could not be opened.") or nil
+    elseif action.id == "preview" and action.type == "activate" then
         local ok, err = state.preview()
         state.failure = not ok and tostring(err or "The preview could not be opened.") or nil
     elseif action.id == "pages" and action.type == "select" then state.tab = whole(action.index)

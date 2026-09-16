@@ -5,6 +5,22 @@ and the 3D Pipes preview. Install it alongside Chicago shell; it registers
 **Start → Settings → Display Properties** and **desktop right-click → Properties**
 through registry metadata. Its Welcome tip is registered by Display too. The shell does not import this module.
 
+## Screen Saver layout
+
+The Screen Saver page follows the classic Display Properties structure: a static
+monitor above the Screen saver group, a selector with Settings and Preview on
+one row, Wait and resume controls, a separate Monitor power group, and the
+standard OK / Cancel / Apply footer. The monitor does not animate.
+
+**Settings…** opens a separate 3D Pipes Settings dialog with speed (Slow, Normal,
+Fast), thickness (Thin, Normal, Thick), and palette (Classic, Chrome, Neon).
+OK saves these preferences for the current user; Cancel discards edits. Each
+Preview reads the latest saved settings. These settings are independent of the
+Display window's Apply button, which applies desktop appearance changes.
+
+Wait, Welcome screen on resume, and Power are disabled: automatic activation,
+locking and operating-system power control are not implemented.
+
 ## 3D Pipes preview
 
 Open **Display Properties > Screen Saver**, choose **3D Pipes**, and click
@@ -30,6 +46,8 @@ without graphics displays an explanation; any key returns to Display.
 
 - `chicago.display:window` owns the settings UI and uses the shell settings repository.
 - `chicago.display:desktop_properties` contributes a `chicago.desktop_menu` entry.
+- `chicago.display.pipes:settings` owns the settings dialog; `options` validates
+  the versioned `display_pipes_v1` setting in the existing per-user repository.
 - `chicago.display.pipes:model` owns the bounded simulation; `render` draws it
   in the preview process, publishing PNG data through the SDK's `picture` node.
 - The compositor uses the ordinary `chicago.shell.sdk:render`. No per-app theme
@@ -51,7 +69,7 @@ Add this dependency to your application's registry and run `wippy install`:
 - name: display
   kind: ns.dependency
   component: github.com/chicago-desktop/display
-  version: ">=0.1.1"
+  version: ">=0.1.2"
 ```
 
 No host-owned resources or dependency parameters are required. The module uses

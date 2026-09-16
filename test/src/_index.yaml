@@ -125,6 +125,8 @@ entries:
     modules: [gfx, fs, time]
     imports:
       test: wippy.test:test
+      options: chicago.display.pipes:options
+      settings: chicago.display.pipes:settings
       pipes: chicago.display.pipes:model
       window: chicago.display.pipes:window
       renderer: chicago.shell.sdk:render

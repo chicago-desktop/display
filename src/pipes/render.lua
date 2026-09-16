@@ -2,6 +2,8 @@
 -- All drawing is local to the provider; only its encoded PNG crosses the SDK.
 local render = {}
 local COLORS: {{number}} = {{220,224,22},{32,238,50},{232,223,214},{235,24,18},{32,155,230}}
+local CHROME = {{220,226,234},{220,226,234},{220,226,234},{220,226,234},{220,226,234}}
+local NEON = {{255,40,190},{30,255,230},{165,70,255},{255,160,20},{80,240,40}}
 local BANDS = {0.19,0.39,0.68,0.96,1.2,1.08,0.81,0.52,0.25}
 local function tint(color: any, light: number): string
     return string.format("#%02x%02x%02x",math.floor(math.min(255,color[1]*light)),
@@ -64,7 +66,11 @@ function render.centerline(points: any): any
     out[#out+1]=points[#points]
     return out
 end
-function render.paint(raster: any, scene: any, width: number, height: number)
+function render.paint(raster: any, scene: any, width: number, height: number, settings: any?)
+    local thickness = settings and settings.thickness or "normal"
+    local palette = settings and settings.palette or "classic"
+    local colors = palette == "chrome" and CHROME or (palette == "neon" and NEON or COLORS)
+    local factor = thickness == "thin" and 0.65 or (thickness == "thick" and 1.5 or 1)
     raster:fill("#000000")
     local paths,parts={},{}
     for _,segment in ipairs(scene.segments or {}) do
@@ -79,6 +85,7 @@ function render.paint(raster: any, scene: any, width: number, height: number)
             local points={}
             for _,point in ipairs(render.centerline(path.points)) do points[#points+1]=render.project(point,width,height) end
             for i,p in ipairs(points) do
+                p.r=p.r*factor
                 local a,b=points[math.tointeger(math.max(1,i-1)) or 1],points[math.tointeger(math.min(#points,i+1)) or 1]
                 local dx,dy=tonumber(b.x-a.x) or 0,tonumber(b.y-a.y) or 0
                 local length=math.sqrt(dx*dx+dy*dy)
@@ -86,14 +93,14 @@ function render.paint(raster: any, scene: any, width: number, height: number)
             end
             for i=1,#points-1 do
                 local a,b=points[i],points[i+1]
-                parts[#parts+1]={a=a,b=b,color=COLORS[math.tointeger(path.color) or 1],z=(a.z+b.z)*0.5,order=#parts+1,key=tostring(id)..":"..tostring(i)}
+                parts[#parts+1]={a=a,b=b,color=colors[math.tointeger(path.color) or 1],z=(a.z+b.z)*0.5,order=#parts+1,key=tostring(id)..":"..tostring(i)}
             end
         end
     end
     table.sort(parts,function(a,b) if a.z==b.z then return a.order<b.order end;return a.z>b.z end)
     local previous=scene.render_cache or {}
-    if previous.width~=width or previous.height~=height then previous={} end
-    local cached={width=width,height=height}
+    if previous.width~=width or previous.height~=height or previous.thickness~=thickness or previous.palette~=palette then previous={} end
+    local cached={width=width,height=height,thickness=thickness,palette=palette}
     local function same(a: any,b: any): boolean
         return a ~= nil and b ~= nil and a.x==b.x and a.y==b.y and a.z==b.z and a.nx==b.nx and a.ny==b.ny
     end

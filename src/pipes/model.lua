@@ -18,11 +18,12 @@ function pipes.new(seed: integer): any
     end
     return state
 end
-function pipes.step(state: any): any
+function pipes.step(state: any, speed: any?): any
+    local advance = speed == "slow" and 0.125 or (speed == "fast" and 0.5 or 0.25)
     state.frame = state.frame + 1
     local unfinished = false
     for _, segment in ipairs(state.segments) do
-        if segment.progress < 1 then segment.progress = math.min(1, segment.progress + 0.25); unfinished = true end
+        if segment.progress < 1 then segment.progress = math.min(1, segment.progress + advance); unfinished = true end
     end
     if unfinished then return state end
     local added = false
@@ -41,7 +42,7 @@ function pipes.step(state: any): any
             end
             if #choices > 0 and #state.segments < pipes.LIMIT then
                 local next_point = choices[random(state, #choices)]
-                state.segments[#state.segments+1] = {a = head.point, b = next_point, color = head.color, pipe = head.pipe, progress = 0.25}
+                state.segments[#state.segments+1] = {a = head.point, b = next_point, color = head.color, pipe = head.pipe, progress = advance}
                 head.direction = {next_point[1]-head.point[1],next_point[2]-head.point[2],next_point[3]-head.point[3]}
                 head.point, head.count = next_point, head.count + 1
                 state.occupied[key(next_point)], added = true, true
