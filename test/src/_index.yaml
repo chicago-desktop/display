@@ -137,6 +137,24 @@ entries:
       app: chicago.shell.sdk:app
       rasters: chicago.shell.theme:rasters
 
+  - name: pattern_test
+    kind: function.lua
+    source: file://pattern_test.lua
+    method: run
+    meta: {type: test, suite: chicago_display, group: Pattern}
+    modules: [gfx, fs, json, base64]
+    imports:
+      test: wippy.test:test
+      pattern: chicago.display:pattern
+      model: chicago.display:model
+      display: chicago.display:window
+      ui: chicago.shell.sdk:ui
+      app: chicago.shell.sdk:app
+      renderer: chicago.shell.sdk:render
+      chrome: chicago.shell.theme:chrome_pixels
+      cells_chrome: chicago.shell.theme:chrome
+      rasters: chicago.shell.theme:rasters
+
   - name: entries_test
     kind: function.lua
     source: file://entries_test.lua

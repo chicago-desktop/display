@@ -1,5 +1,5 @@
 -- "Display Properties", the pure model: desktop colors, the color format
--- check, resolution captions. Nothing about the database and the compositor:
+-- check, resolution captions, the "Pattern" dialog's answer. Nothing about the database and the compositor:
 -- that belongs to the window.
 local geometry = require("geometry")
 local whole = geometry.whole
@@ -83,5 +83,30 @@ function model.graphics(pixels: any): string
     if pixels == true then return "Pixel graphics: yes" end
     return "Pixel graphics: no, cells only"
 end
+
+-- The "Pattern" dialog (`chicago.display:pattern`) answers the window that
+-- opened it on this topic with `{pattern = <name>}`.
+model.PATTERN_ENTRY = "chicago.display:pattern"
+model.PATTERN_TOPIC = "chicago.display.pattern"
+
+-- pattern_choice(got) -> the pattern name a PATTERN_TOPIC message carries, or
+-- nil. A message's payload arrives wrapped, and a field read directly would
+-- be nil without an error.
+function model.pattern_choice(got: any): any
+    local value: any = got
+    if type(got) == "userdata" or (type(got) == "table" and type(got.payload) == "function") then
+        value = got:payload()
+    end
+    if type(value) == "userdata" then
+        local ok, decoded = pcall(function() return value:data() end)
+        value = ok and decoded or nil
+    end
+    if type(value) == "table" and value[1] ~= nil then value = value[1] end
+    if type(value) == "table" and type(value.pattern) == "string" then return value.pattern end
+    return nil
+end
+
+-- The ways a wallpaper is shown, as the "Display:" drop-down lists them.
+model.WALLPAPER_MODES = {{value = "center", label = "Center"}, {value = "tile", label = "Tile"}}
 
 return model

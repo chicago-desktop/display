@@ -6,3 +6,7 @@ license: MIT
 exclude_meta:
   type: [test]
 exclude: ["test/**", "test:**", "app:**", ".wippy/**", "wippy.lock"]
+# `wippy publish` embeds only the fs.directory entries named here; the image
+# pack lies outside src/.
+embed:
+  - chicago.display:images

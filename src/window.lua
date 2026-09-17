@@ -15,10 +15,12 @@
 -- and draws the buttons at their classic size inside their cells. The cell
 -- numbers (`size`, `padding`, `gap`) are the same tree in character mode.
 --
--- "Background" is the pattern: the classic 8×8 tiles
--- (`chicago.shell.display:patterns`), tiled by the pixel theme over the
--- desktop color. The wallpaper group stands there disabled until wallpapers
--- exist. "Appearance" holds the desktop color, where the original kept it: the
+-- "Background" is the wallpaper, as the original's: a list of the shell's
+-- pictures (`chicago.shell.display:wallpapers`) and how to show one. The
+-- pattern — the classic 8×8 tiles (`chicago.shell.display:patterns`), tiled
+-- by the pixel theme over the desktop color — is chosen in the "Pattern"
+-- dialog (`chicago.display:pattern`), which sends the choice back to this
+-- window. "Appearance" holds the desktop color, where the original kept it: the
 -- color of the Desktop item. "Screen Saver" offers the manual 3D Pipes preview.
 -- "Apply" and "OK" write the choice into the shell settings and ask the
 -- compositor to reread the desktop (`desktop.refresh`), which repaints the
@@ -73,6 +75,10 @@ function definition.init(args: any, context: any): any
     local entry: any = wallpapers.find(wallpaper)
     local mode = (stored_mode == "tile" or stored_mode == "center") and stored_mode or (entry and entry.mode or "center")
     local failure = err or perr or werr or merr
+    -- The Pattern dialog answers on its topic; the loop hands the message to
+    -- `update` as a `channel` action.
+    local answers = process.listen(model.PATTERN_TOPIC)
+    if answers then context.watch(answers) end
     return {tab = 1, chosen = chosen, saved = chosen, pattern = pattern, pattern_saved = pattern,
         wallpaper = wallpaper, wallpaper_saved = wallpaper, mode = mode, mode_saved = mode,
         info = screen_info(),
@@ -83,6 +89,12 @@ function definition.init(args: any, context: any): any
             return desktop.open({entry = "chicago.display.pipes:window", title = "3D Pipes - Preview", args = options.read(saved)})
         end,
         saver_settings = function() return desktop.dialog({entry = "chicago.display.pipes:settings"}) end,
+        -- "Pattern…": the dialog is told the pending pattern and color and
+        -- where to send the choice.
+        pattern_dialog = function(pending: any, color: any)
+            return desktop.dialog({entry = model.PATTERN_ENTRY,
+                args = {pattern = pending, color = color, notify = tostring(process.pid())}})
+        end,
         failure = failure and ("settings not read: " .. tostring(failure)) or nil,
         -- The write and the request to the compositor are moved into a
         -- field: the test substitutes its own and checks that "Apply" calls
@@ -112,39 +124,55 @@ local function monitor(color: any, pattern: any, wallpaper: any, mode: any): any
         wallpaper = wallpaper_file(wallpaper), wallpaper_mode = mode}
 end
 
--- A group's own button, under its list at the group's right edge: 92×23 px,
--- the width of "Edit Pattern…" and "Browse…" in the original.
-local function group_button(id: string, text: string): any
-    return {kind = "row", size = 2, size_px = 30, align = "right", children = {
-        {kind = "button", id = id, size = 16, size_px = 98, width_px = 92, text = text, disabled = true},
-    }}
+-- The Wallpaper list: a picture before every name, as the original's; the
+-- "(None)" row has a blank one, so its caption stands in line with the rest.
+local PICTURE, BLANK = "chicago.display:images/picture", "chicago.display:images/blank"
+local function wallpaper_rows(): any
+    local rows: any = {}
+    for _, item in ipairs(wallpapers.items()) do
+        local none = item.id == wallpapers.NONE
+        rows[#rows + 1] = {id = item.id, cells = {{text = item.text, image = none and BLANK or PICTURE,
+            icon = none and " " or "▪"}}}
+    end
+    return rows
 end
 
+-- A button of the Wallpaper group's right column: 75×23 px at the column's
+-- right edge, the column as wide as a dialog button's cells.
+local function side_button(id: string, text: string, extra: any): any
+    local node: any = {kind = "button", id = id, text = text, size = 10, size_px = 81, width_px = 75}
+    for key, value in pairs(extra or {}) do node[key] = value end
+    return {kind = "row", size = 2, size_px = 30, align = "right", children = {node}}
+end
+
+-- Background, as the original's (the Windows 95 Plus!/IE4 dialog): the
+-- monitor, and under it one Wallpaper group — the caption, the list of
+-- pictures on the left; "Browse…", "Pattern…" and the "Display:" drop-down
+-- on the right. The pattern has its own dialog ("Pattern…"). "Browse…"
+-- waits for a file dialog; the drop-down is disabled without a wallpaper.
 local function background(state: any): any
+    local none = state.wallpaper == wallpapers.NONE
     local page: any = {kind = "column", gap = 0, children = {
-        monitor(state.chosen, state.pattern, state.wallpaper, state.mode),
-        {kind = "row", gap = 1, gap_px = 11, children = {
-            {kind = "group", title = "Pattern", children = {
-                {kind = "list", id = "patterns", items = patterns.items(), selected = state.pattern},
-                group_button("edit_pattern", "Edit Pattern…"),
-            }},
-            {kind = "group", title = "Wallpaper", children = {
-                {kind = "list", id = "wallpapers", items = wallpapers.items(), selected = state.wallpaper},
-                group_button("browse", "Browse…"),
-                -- "Display: ( ) Tile (•) Center". The caption has size 0 in cells,
-                -- where the group is 16 columns and holds only the two buttons.
-                {kind = "row", size = 1, size_px = 20, gap = 0, gap_px = 6, children = {
-                    {kind = "label", size = 0, size_px = 50, text = "Display:"},
-                    {kind = "radio", id = "tile", size = 8, size_px = 60, text = "Tile", checked = state.mode == "tile",
-                        disabled = state.wallpaper == wallpapers.NONE},
-                    {kind = "radio", id = "center", text = "Center", checked = state.mode ~= "tile",
-                        disabled = state.wallpaper == wallpapers.NONE},
+        {kind = "monitor", color = state.chosen, pattern = patterns.find(state.pattern),
+            wallpaper = wallpaper_file(state.wallpaper), wallpaper_mode = state.mode},
+        -- Nine rows in both modes: the caption and the right column — two
+        -- buttons of two rows, "Display:" and the drop-down of one.
+        {kind = "group", title = "Wallpaper", size = 9, children = {
+            {kind = "label", size = 1, size_px = 20, text = "Select a picture:"},
+            {kind = "row", gap = 1, gap_px = 11, children = {
+                {kind = "table", id = "wallpapers", header = false, columns = {{title = "Name", weight = 1}},
+                    rows = wallpaper_rows(), selected = state.wallpaper},
+                {kind = "column", size = 10, size_px = 81, gap = 0, children = {
+                    side_button("browse", "Browse…", {disabled = true}),
+                    side_button("pattern", "Pattern…"),
+                    {kind = "label", size = 1, size_px = 20, text = "Display:"},
+                    {kind = "select", id = "mode", size = 1, size_px = 22, value = state.mode,
+                        options = model.WALLPAPER_MODES, disabled = none},
                 }},
-                {kind = "label", size = 1, text = "Browse needs a file dialog.", disabled = true},
             }},
         }},
     }}
-    -- A failure to read or write the settings: under the lists, in red.
+    -- A failure to read or write the settings: under the group, in red.
     if state.failure then page.children[#page.children + 1] = {kind = "label", size = 1, text = state.failure, alert = true} end
     return page
 end
@@ -300,9 +328,6 @@ function definition.update(state: any, action: any, context: any)
     elseif action.id == "colors" and (action.type == "select" or action.type == "activate") then
         local item: any = action.value
         if type(item) == "table" and model.valid(item.id) then state.chosen = item.id end
-    elseif action.id == "patterns" and (action.type == "select" or action.type == "activate") then
-        local item: any = action.value
-        if type(item) == "table" then state.pattern = pattern_of(item.id) end
     elseif action.id == "wallpapers" and (action.type == "select" or action.type == "activate") then
         -- A wallpaper comes with the way it is meant to be shown; the radio
         -- buttons change it afterwards.
@@ -312,8 +337,16 @@ function definition.update(state: any, action: any, context: any)
             local entry: any = wallpapers.find(state.wallpaper)
             if entry then state.mode = entry.mode end
         end
-    elseif (action.id == "tile" or action.id == "center") and action.type == "change" then
-        state.mode = action.id
+    elseif action.id == "mode" and action.type == "change" then
+        if action.value == "tile" or action.value == "center" then state.mode = action.value end
+    elseif action.id == "pattern" and action.type == "activate" then
+        local ok, err = state.pattern_dialog(state.pattern, state.chosen)
+        state.failure = not ok and tostring(err or "The Pattern dialog could not be opened.") or nil
+    elseif action.type == "channel" then
+        -- The Pattern dialog's OK: the pending pattern, written by Apply.
+        local name = model.pattern_choice(action.value)
+        if name == nil then return false end
+        state.pattern = pattern_of(name)
     elseif action.id == "apply" then apply(state)
     elseif action.id == "ok" then
         if apply(state) then context.close() end

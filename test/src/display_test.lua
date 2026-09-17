@@ -14,12 +14,20 @@ local chrome_pixels = require("chrome_pixels")
 local widgets = require("widgets")
 local palette = require("palette")
 
+-- The window's model without a database or a compositor: the write and the
+-- Pattern dialog are substituted, and the dialog records what it was told.
 local function fixture(): (any, any)
     local written: any = {}
-    return {tab = 1, chosen = "#008080", saved = "#008080", pattern = "(None)", pattern_saved = "(None)",
+    local state: any = {tab = 1, chosen = "#008080", saved = "#008080", pattern = "(None)", pattern_saved = "(None)",
         wallpaper = "(None)", wallpaper_saved = "(None)", mode = "center", mode_saved = "center",
         info = {screen = {width = 100, height = 28}, cell = {w = 10, h = 20}, pixels = true},
-        persist = function(settings: any) written[#written + 1] = settings; return true, nil end}, written
+        dialogs = {},
+        persist = function(settings: any) written[#written + 1] = settings; return true, nil end}
+    state.pattern_dialog = function(pattern: any, color: any)
+        state.dialogs[#state.dialogs + 1] = {pattern = pattern, color = color}
+        return true, nil
+    end
+    return state, written
 end
 
 -- The window entry's size (`chicago.display:window`, 54×28) minus
@@ -131,7 +139,21 @@ local function define_tests()
                 test.eq(apply.px.x + apply.px.w - 1, right, where .. ": the buttons end on the page frame's right edge")
                 local monitor: any = nil
                 for _, item in ipairs(plan.items) do if item.node.kind == "monitor" then monitor = item end end
-                test.is_true(plan.by_id.patterns.rect.y > monitor.rect.y + monitor.rect.h - 1, where .. ": the pattern list under the monitor")
+                test.is_true(plan.by_id.wallpapers.rect.y > monitor.rect.y + monitor.rect.h - 1, where .. ": the wallpaper list under the monitor")
+                -- The Wallpaper group's right column: Browse…, Pattern… and
+                -- the Display drop-down, beside the list, 75×23 px buttons.
+                local list, browse, pattern_button, mode = plan.by_id.wallpapers, plan.by_id.browse, plan.by_id.pattern, plan.by_id.mode
+                test.eq(browse.rect.y, list.rect.y, where .. ": Browse… stands at the list's top")
+                test.is_true(pattern_button.rect.y > browse.rect.y and mode.rect.y > pattern_button.rect.y,
+                    where .. ": Pattern… under Browse…, Display under Pattern…")
+                for _, side in ipairs({browse, pattern_button, mode}) do
+                    test.is_true(side.rect.x > list.rect.x + list.rect.w - 1, where .. ": " .. side.node.id .. " right of the list")
+                    test.is_true(side.rect.y + side.rect.h <= list.rect.y + list.rect.h, where .. ": " .. side.node.id .. " within the list's height")
+                end
+                test.eq(pattern_button.px and pattern_button.px.w, 75, where .. ": Pattern… is 75 px wide")
+                test.is_true(pattern_button.rect.h * ch >= 23, where .. ": Pattern… holds a 23 px button")
+                test.eq(pattern_button.px.x + pattern_button.px.w - 1, (mode.rect.x + mode.rect.w - 1) * cw,
+                    where .. ": the buttons end where the drop-down ends")
                 -- What the renderer draws: three 75×23 buttons and a 4:3 screen.
                 local buttons = 0
                 local screen: any = nil
@@ -174,26 +196,55 @@ local function define_tests()
         test.it("choosing a wallpaper and how to show it writes both and previews it on the monitor", function()
             local state, written = fixture()
             local context = {width = 44, height = 22, close = function() end}
-            display.definition.update(state, {type = "select", id = "wallpapers", index = 2, value = {id = "Rivets", text = "Rivets"}}, context)
-            test.eq(state.wallpaper .. "/" .. state.mode, "Rivets/tile", "a wallpaper comes with the way it is meant to be shown")
-            display.definition.update(state, {type = "select", id = "wallpapers", index = 3, value = {id = "Sky", text = "Sky"}}, context)
-            test.eq(state.wallpaper .. "/" .. state.mode, "Sky/center", "a picture is centred, a tile tiled")
-            display.definition.update(state, {type = "change", id = "tile", value = true}, context)
-            test.eq(state.mode, "tile", "Tile is chosen by its radio button")
             local plan = ui.plan(display.definition.view(state, context), 44, 22, ui.interaction())
-            test.is_true(plan.by_id.tile.node.checked == true and plan.by_id.center.node.checked ~= true, "one radio button at a time")
+            test.is_true(plan.by_id.mode.node.disabled == true, "no wallpaper, nothing to tile or center")
+            test.eq(plan.by_id.wallpapers.node.header, false, "the list has no header, as the original's")
+            local rows = plan.by_id.wallpapers.node.rows
+            test.eq(rows[1].id, "(None)", "(None) comes first")
+            test.eq(rows[1].cells[1].image, "chicago.display:images/blank", "(None) has a blank picture")
+            test.eq(rows[2].cells[1].image, "chicago.display:images/picture", "a wallpaper has the picture")
+            display.definition.update(state, {type = "select", id = "wallpapers", index = 2, value = rows[2]}, context)
+            test.eq(state.wallpaper .. "/" .. state.mode, "Rivets/tile", "a wallpaper comes with the way it is meant to be shown")
+            display.definition.update(state, {type = "select", id = "wallpapers", index = 3, value = rows[3]}, context)
+            test.eq(state.wallpaper .. "/" .. state.mode, "Sky/center", "a picture is centred, a tile tiled")
+            display.definition.update(state, {type = "change", id = "mode", value = "stretch"}, context)
+            test.eq(state.mode, "center", "a way nobody draws is not taken")
+            display.definition.update(state, {type = "change", id = "mode", value = "tile"}, context)
+            test.eq(state.mode, "tile", "Tile is chosen in the Display drop-down")
+            plan = ui.plan(display.definition.view(state, context), 44, 22, ui.interaction())
+            test.eq(plan.by_id.mode.node.value, "tile", "the drop-down shows the choice")
+            test.is_true(plan.by_id.mode.node.disabled ~= true, "a wallpaper can be tiled or centred")
             local monitor: any = nil
             for _, item in ipairs(plan.items) do if item.node.kind == "monitor" then monitor = item end end
             test.eq(tostring(monitor.node.wallpaper) .. ":" .. tostring(monitor.node.wallpaper_mode), "wallpaper_sky:tile",
                 "the monitor previews the choice")
             test.is_true(plan.by_id.browse.node.disabled == true, "Browse… waits for a file dialog")
+            test.is_true(plan.by_id.pattern.node.disabled ~= true, "Pattern… is live")
             display.definition.update(state, {type = "activate", id = "apply"}, context)
             test.eq(tostring(written[1].desktop_wallpaper) .. "/" .. tostring(written[1].wallpaper_mode), "Sky/tile")
             test.is_nil(written[1].desktop_color, "only what changed is written")
-            display.definition.update(state, {type = "select", id = "wallpapers", index = 1, value = {id = "(None)"}}, context)
-            plan = ui.plan(display.definition.view(state, context), 44, 22, ui.interaction())
-            test.is_true(plan.by_id.tile.node.disabled == true and plan.by_id.center.node.disabled == true,
-                "no wallpaper, nothing to tile or center")
+        end)
+        test.it("\"Pattern…\" opens the dialog with the pending choice and takes its answer as pending", function()
+            local state, written = fixture()
+            local context = {width = 44, height = 22, close = function() end}
+            display.definition.update(state, {type = "select", id = "colors", index = 2, value = {id = "#000080", text = "Navy"}}, context)
+            display.definition.update(state, {type = "activate", id = "pattern"}, context)
+            test.eq(#state.dialogs, 1, "one dialog asked for")
+            test.eq(tostring(state.dialogs[1].pattern) .. "/" .. tostring(state.dialogs[1].color), "(None)/#000080",
+                "the dialog is told the pending pattern and color")
+            test.is_nil(state.failure)
+            test.eq(display.definition.update(state, {type = "channel", value = {other = true}}, context), false,
+                "a message without a pattern changes nothing")
+            display.definition.update(state, {type = "channel", value = {pattern = "Bricks"}}, context)
+            test.eq(state.pattern .. "/" .. state.pattern_saved, "Bricks/(None)", "the answer is pending, not written")
+            test.eq(#written, 0)
+            local plan = ui.plan(display.definition.view(state, context), 44, 22, ui.interaction())
+            test.is_true(plan.by_id.apply.node.disabled ~= true, "Apply is enabled by the new pattern")
+            display.definition.update(state, {type = "channel", value = {pattern = "Nope"}}, context)
+            test.eq(state.pattern, "(None)", "a pattern nobody can draw is no pattern")
+            state.pattern_dialog = function() return nil, "desktop unavailable" end
+            display.definition.update(state, {type = "activate", id = "pattern"}, context)
+            test.eq(state.failure, "desktop unavailable", "a refused dialog is named")
         end)
         test.it("choosing a color and a pattern, \"Apply\" and \"OK\" write through the substituted write", function()
             local state, written = fixture()
@@ -202,7 +253,7 @@ local function define_tests()
             local plan = ui.plan(display.definition.view(state, context), 44, 22, ui.interaction())
             test.is_true(plan.by_id.apply.node.disabled == true, "nothing to apply: the button is disabled")
             display.definition.update(state, {type = "select", id = "colors", index = 2, value = {id = "#000080", text = "Navy"}}, context)
-            display.definition.update(state, {type = "select", id = "patterns", index = 2, value = {id = "Bricks", text = "Bricks"}}, context)
+            display.definition.update(state, {type = "channel", value = {pattern = "Bricks"}}, context)
             test.eq(state.chosen .. "/" .. state.pattern, "#000080/Bricks")
             test.eq(state.saved .. "/" .. state.pattern_saved, "#008080/(None)")
             plan = ui.plan(display.definition.view(state, context), 44, 22, ui.interaction())
@@ -214,8 +265,8 @@ local function define_tests()
             test.eq(closed, 0, "\"Apply\" does not close the window")
             display.definition.update(state, {type = "select", id = "colors", index = 1, value = {id = "#zzzzzz"}}, context)
             test.eq(state.chosen, "#000080", "an invalid color is not accepted")
-            display.definition.update(state, {type = "select", id = "patterns", index = 1, value = {id = "Nope"}}, context)
-            test.eq(state.pattern, "(None)", "a pattern nobody can draw is no pattern")
+            display.definition.update(state, {type = "channel", value = {pattern = "(None)"}}, context)
+            test.eq(state.pattern, "(None)", "the dialog's (None) clears the pattern")
             display.definition.update(state, {type = "activate", id = "ok"}, context)
             test.eq(closed, 1)
             test.eq(#written, 2, "OK writes the pending pattern")

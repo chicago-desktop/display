@@ -5,6 +5,21 @@ and the 3D Pipes preview. Install it alongside Chicago shell; it registers
 **Start → Settings → Display Properties** and **desktop right-click → Properties**
 through registry metadata. Its Welcome tip is registered by Display too. The shell does not import this module.
 
+## Background layout
+
+The Background page follows the classic dialog: the preview monitor above one
+Wallpaper group — "Select a picture:", the list of the shell's wallpapers
+(each with a picture, "(None)" first) on the left, and **Browse…**,
+**Pattern…** and the **Display** drop-down (Center, Tile) on the right. Browse
+is disabled until a file dialog serves it; the drop-down is disabled without a
+wallpaper. Stretch is not offered: the desktop draws pictures at 1:1.
+
+**Pattern…** opens the Pattern dialog (`chicago.display:pattern`): the hint,
+the pattern list, a 1:1 preview over the pending desktop color, OK, Cancel and
+a disabled **Edit Pattern…**. OK sends the choice back to Display Properties
+as the pending pattern; **Apply** or **OK** there writes it, Cancel there
+drops it.
+
 ## Screen Saver layout
 
 The Screen Saver page follows the classic Display Properties structure: a static
@@ -45,6 +60,10 @@ without graphics displays an explanation; any key returns to Display.
 ## Architecture
 
 - `chicago.display:window` owns the settings UI and uses the shell settings repository.
+- `chicago.display:pattern` is the Pattern dialog; it writes nothing and
+  answers the opener's pid on the `chicago.display.pattern` topic.
+- `chicago.display:images` is the module's image pack (the Wallpaper list's
+  pictures), drawn by `tools/display_images.py` (`make icons`).
 - `chicago.display:desktop_properties` contributes a `chicago.desktop_menu` entry.
 - `chicago.display.pipes:settings` owns the settings dialog; `options` validates
   the versioned `display_pipes_v1` setting in the existing per-user repository.
@@ -80,18 +99,18 @@ when Welcome is installed, without a dependency on Welcome itself.
 
 ```sh
 cd test
-CHICAGO_PIXELS=1 ../../app/bin/wippy-floppy run --host chicago.shell:terminal chicago
+CHICAGO_PIXELS=1 ../../app/bin/wippy run --host chicago.shell:terminal chicago
 ```
 
 Right-click the desktop, then **Properties → Screen Saver → Preview**.
 
 ## Development
 
-With a Chicago runtime containing `gfx` at `../app/bin/wippy-floppy`:
+With a Chicago runtime containing `gfx` at `../app/bin/wippy`:
 
 ```sh
 cd test
-../../app/bin/wippy-floppy install
+../../app/bin/wippy install
 cd ..
 make test
 make lint
@@ -100,7 +119,9 @@ make lint
 The harness replaces Display, shell and tui-desktop with sibling working copies.
 It owns all test host resources; the product module declares none. Tests include
 layout, settings updates, bounded growth, perspective, rounded elbows and close, launch failure and
-real raster rendering at two window sizes (`test/shots/pipes_*.png`).
+real raster rendering at two window sizes (`test/shots/pipes_*.png`), and the
+Background page and the Pattern dialog at 8×16 and 10×20
+(`test/shots/background_*.png`, `test/shots/pattern_*.png`).
 
 ## Migration
 

@@ -15,6 +15,21 @@ entries:
       text: Properties
       image: display_properties
       entry: chicago.display:window
+  # chicago.display:images
+  #
+  # An image pack of the shell (meta.type chicago.images), named
+  # `chicago.display:images/<file>` — the picture before every wallpaper name
+  # and the blank one of "(None)". Own pixel art, drawn by
+  # tools/display_images.py.
+  - name: images
+    kind: fs.directory
+    meta:
+      type: chicago.images
+      comment: "Display's pictures — a picture file and a blank square for the Wallpaper list (own pixel art, tools/display_images.py)."
+    base: module
+    directory: ./assets/images
+    auto_init: false
+
   # chicago.display:model
   - name: model
     kind: library.lua
@@ -58,13 +73,15 @@ entries:
       height: 28
       pixel_render: chicago.shell.sdk:render
       pixel_state: chicago.display:window
-      comment: Display Properties — the desktop pattern and color with a preview, applied through the shell settings; resolution and palette are read-only; a window on the shell SDK.
+      comment: Display Properties — the wallpaper with its Pattern dialog, the desktop color and a preview, applied through the shell settings; resolution and palette are read-only; a window on the shell SDK.
     source: file://window.lua
     method: main
     modules:
       - sql
       - time
       - uuid
+      # Display listens for the Pattern dialog's choice; the dialog sends it.
+      - process
     security:
       policies: [chicago.display:window_scope, chicago.shell.security:layout_target]
     imports:
@@ -76,6 +93,34 @@ entries:
       model: chicago.display:model
       patterns: chicago.shell.display:patterns
       wallpapers: chicago.shell.display:wallpapers
+
+  # chicago.display:pattern
+  - name: pattern
+    kind: process.lua
+    meta:
+      type: tui_desktop.window
+      title: Pattern
+      image: display_properties
+      in_menu: false
+      window_type: dialog
+      resizable: false
+      # The list shows about five patterns, as the original's.
+      width: 46
+      height: 13
+      pixel_render: chicago.shell.sdk:render
+      pixel_state: chicago.display:pattern
+      comment: "The Pattern dialog of Display Properties — the pattern list and a 1:1 preview over the desktop color; OK sends the choice to the window that opened it, which writes it on Apply."
+    source: file://pattern.lua
+    method: main
+    modules: [json, gfx, base64, process]
+    security:
+      policies: [chicago.display:window_scope]
+    imports:
+      app: chicago.shell.sdk:app
+      ui: chicago.shell.sdk:ui
+      geometry: chicago.tui_desktop.desktop:geometry
+      model: chicago.display:model
+      patterns: chicago.shell.display:patterns
 
   - name: tip
     kind: registry.entry
