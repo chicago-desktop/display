@@ -36,6 +36,7 @@ local patterns = require("patterns")
 local wallpapers = require("wallpapers")
 local geometry = require("geometry")
 local options = require("options")
+local json = require("json")
 local whole = geometry.whole
 
 local definition: any = {}
@@ -62,6 +63,18 @@ local function wallpaper_file(name: any): any
     return entry and entry.file or nil
 end
 
+-- The compositor hands a window its `args` only as a non-empty string: a
+-- table is dropped on the way. So the specs of the windows Display opens
+-- carry their arguments encoded.
+local function pattern_spec(pending: any, color: any, notify: any): (any, any)
+    local encoded, err = json.encode({pattern = pending, color = color, notify = notify})
+    if not encoded then return nil, err end
+    return {entry = model.PATTERN_ENTRY, args = encoded}, nil
+end
+local function preview_spec(saved: any): any
+    return {entry = "chicago.display.pipes:window", title = "3D Pipes - Preview", args = options.encode(saved)}
+end
+
 function definition.init(args: any, context: any): any
     -- The logged-on person's settings: another person's desktop keeps its own.
     local store: any = repo.of(repo.person())
@@ -86,14 +99,15 @@ function definition.init(args: any, context: any): any
         preview = function()
             local saved, read_err = store.setting(options.KEY)
             if read_err then return nil, tostring(read_err) end
-            return desktop.open({entry = "chicago.display.pipes:window", title = "3D Pipes - Preview", args = options.read(saved)})
+            return desktop.open(preview_spec(saved))
         end,
         saver_settings = function() return desktop.dialog({entry = "chicago.display.pipes:settings"}) end,
         -- "Pattern…": the dialog is told the pending pattern and color and
         -- where to send the choice.
         pattern_dialog = function(pending: any, color: any)
-            return desktop.dialog({entry = model.PATTERN_ENTRY,
-                args = {pattern = pending, color = color, notify = tostring(process.pid())}})
+            local spec, err = pattern_spec(pending, color, tostring(process.pid()))
+            if not spec then return nil, err end
+            return desktop.dialog(spec)
         end,
         failure = failure and ("settings not read: " .. tostring(failure)) or nil,
         -- The write and the request to the compositor are moved into a
@@ -357,4 +371,4 @@ end
 -- Esc closes the window: the loop does it for an Esc `update` did not take.
 definition.close_on_escape = true
 
-return {main = app.main(definition), definition = definition}
+return {main = app.main(definition), definition = definition, pattern_spec = pattern_spec, preview_spec = preview_spec}

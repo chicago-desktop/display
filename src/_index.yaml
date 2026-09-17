@@ -82,6 +82,8 @@ entries:
       - uuid
       # Display listens for the Pattern dialog's choice; the dialog sends it.
       - process
+      # The opened windows' arguments travel as JSON strings.
+      - json
     security:
       policies: [chicago.display:window_scope, chicago.shell.security:layout_target]
     imports:
